@@ -7,7 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/aquasecurity/libbpfgo"
-	"github.com/cloudflare/ebpf_exporter/v2/util"
+	"github.com/ZhangYet/ebpf_exporter/util"
 )
 
 func BenchmarkGetpidWithoutAnyProbes(b *testing.B) {

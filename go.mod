@@ -1,4 +1,4 @@
-module github.com/cloudflare/ebpf_exporter/v2
+module github.com/ZhangYet/ebpf_exporter
 
 go 1.17
 

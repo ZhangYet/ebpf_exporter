@@ -3,7 +3,7 @@ package decoder
 import (
 	"fmt"
 
-	"github.com/cloudflare/ebpf_exporter/v2/config"
+	"github.com/ZhangYet/ebpf_exporter/config"
 )
 
 // StaticMap is a decoded that maps values according to a static map

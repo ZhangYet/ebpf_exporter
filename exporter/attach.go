@@ -3,12 +3,12 @@ package exporter
 import (
 	"log"
 
+	"github.com/ZhangYet/ebpf_exporter/config"
 	"github.com/aquasecurity/libbpfgo"
-	"github.com/cloudflare/ebpf_exporter/v2/config"
 )
 
-func attachModule(module *libbpfgo.Module, cfg config.Config) (map[*libbpfgo.BPFProg]bool, error) {
-	attached := map[*libbpfgo.BPFProg]bool{}
+func attachModule(module *libbpfgo.Module, cfg config.Config) (map[*libbpfgo.BPFProg]*libbpfgo.BPFLink, error) {
+	attached := map[*libbpfgo.BPFProg]*libbpfgo.BPFLink{}
 
 	iter := module.Iterator()
 	for {
@@ -17,12 +17,12 @@ func attachModule(module *libbpfgo.Module, cfg config.Config) (map[*libbpfgo.BPF
 			break
 		}
 
-		_, err := prog.AttachGeneric()
+		link, err := prog.AttachGeneric()
 		if err != nil {
 			log.Printf("Failed to attach program %q for config %q: %v", prog.Name(), cfg.Name, err)
-			attached[prog] = false
+			attached[prog] = nil
 		} else {
-			attached[prog] = true
+			attached[prog] = link
 		}
 	}
 
