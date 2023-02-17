@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/aquasecurity/libbpfgo"
-	"github.com/cloudflare/ebpf_exporter/v2/config"
-	"github.com/cloudflare/ebpf_exporter/v2/decoder"
+	"github.com/ZhangYet/ebpf_exporter/config"
+	"github.com/ZhangYet/ebpf_exporter/decoder"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

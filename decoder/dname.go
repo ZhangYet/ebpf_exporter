@@ -1,7 +1,7 @@
 package decoder
 
 import (
-	"github.com/cloudflare/ebpf_exporter/v2/config"
+	"github.com/ZhangYet/ebpf_exporter/config"
 )
 
 // Dname is a decoder that decodes DNS qname wire format

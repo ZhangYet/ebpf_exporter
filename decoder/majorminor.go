@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudflare/ebpf_exporter/v2/config"
-	"github.com/cloudflare/ebpf_exporter/v2/util"
+	"github.com/ZhangYet/ebpf_exporter/config"
+	"github.com/ZhangYet/ebpf_exporter/util"
 	"golang.org/x/sys/unix"
 )
 

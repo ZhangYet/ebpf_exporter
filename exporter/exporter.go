@@ -10,10 +10,10 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/ZhangYet/ebpf_exporter/config"
+	"github.com/ZhangYet/ebpf_exporter/decoder"
+	"github.com/ZhangYet/ebpf_exporter/util"
 	"github.com/aquasecurity/libbpfgo"
-	"github.com/cloudflare/ebpf_exporter/v2/config"
-	"github.com/cloudflare/ebpf_exporter/v2/decoder"
-	"github.com/cloudflare/ebpf_exporter/v2/util"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -31,7 +31,7 @@ type Exporter struct {
 	programAttachedDesc      *prometheus.Desc
 	programRunTimeDesc       *prometheus.Desc
 	programRunCountDesc      *prometheus.Desc
-	attachedProgs            map[string]map[*libbpfgo.BPFProg]bool
+	attachedProgs            map[string]map[*libbpfgo.BPFProg]*libbpfgo.BPFLink
 	descs                    map[string]map[string]*prometheus.Desc
 	decoders                 *decoder.Set
 }
@@ -82,7 +82,7 @@ func New(configs []config.Config) (*Exporter, error) {
 		programAttachedDesc: programAttachedDesc,
 		programRunTimeDesc:  programRunTimeDesc,
 		programRunCountDesc: programRunCountDesc,
-		attachedProgs:       map[string]map[*libbpfgo.BPFProg]bool{},
+		attachedProgs:       map[string]map[*libbpfgo.BPFProg]*libbpfgo.BPFLink{},
 		descs:               map[string]map[string]*prometheus.Desc{},
 		decoders:            decoder.NewSet(),
 	}, nil
@@ -116,7 +116,6 @@ func (e *Exporter) Attach() error {
 		if err != nil {
 			return fmt.Errorf("error loading bpf object from %q for config %q: %v", cfg.BPFPath, cfg.Name, err)
 		}
-
 		attachments, err := attachModule(module, cfg)
 		if err != nil {
 			return fmt.Errorf("failed to attach to config %q: %s", cfg.Name, err)
@@ -129,6 +128,18 @@ func (e *Exporter) Attach() error {
 	postAttachMark()
 
 	return nil
+}
+
+func (e *Exporter) Reclaim() {
+	for _, m := range e.attachedProgs {
+		for _, link := range m {
+			fmt.Printf("destroy link: %d\n", link.FileDescriptor())
+			_ = link.Destroy()
+		}
+	}
+	for _, module := range e.modules {
+		module.Close()
+	}
 }
 
 func (e *Exporter) passKaddrs(module *libbpfgo.Module, cfg config.Config) error {
@@ -220,6 +231,39 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
+func (e *Exporter) DescribeWrap() {
+	addDescs := func(programName string, name string, help string, labels []config.Label) {
+		if _, ok := e.descs[programName][name]; !ok {
+			labelNames := []string{}
+
+			for _, label := range labels {
+				labelNames = append(labelNames, label.Name)
+			}
+
+			e.descs[programName][name] = prometheus.NewDesc(prometheus.BuildFQName(prometheusNamespace, "", name), help, labelNames, nil)
+		}
+	}
+
+	for _, cfg := range e.configs {
+		if _, ok := e.descs[cfg.Name]; !ok {
+			e.descs[cfg.Name] = map[string]*prometheus.Desc{}
+		}
+
+		for _, counter := range cfg.Metrics.Counters {
+			if counter.PerfEventArray {
+				perfSink := NewPerfEventArraySink(e.decoders, e.modules[cfg.Name], counter)
+				e.perfEventArrayCollectors = append(e.perfEventArrayCollectors, perfSink)
+			}
+
+			addDescs(cfg.Name, counter.Name, counter.Help, counter.Labels)
+		}
+
+		for _, histogram := range cfg.Metrics.Histograms {
+			addDescs(cfg.Name, histogram.Name, histogram.Help, histogram.Labels[0:len(histogram.Labels)-1])
+		}
+	}
+}
+
 // Collect satisfies prometheus.Collector interface and sends all metrics
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	for _, cfg := range e.configs {
@@ -238,7 +282,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(e.programInfoDesc, prometheus.GaugeValue, 1, name, program.Name(), info.tag, id)
 
 			attachedValue := 0.0
-			if attached {
+			if attached != nil {
 				attachedValue = 1.0
 			}
 
@@ -262,6 +306,37 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 	e.collectCounters(ch)
 	e.collectHistograms(ch)
+}
+
+func (e *Exporter) CollectRaw() (map[string][]RawMetric, error) {
+	ret := make(map[string][]RawMetric)
+	for _, cfg := range e.configs {
+		for _, counter := range cfg.Metrics.Counters {
+			if counter.PerfEventArray {
+				continue
+			}
+
+			mapValues, err := e.mapValues(e.modules[cfg.Name], counter.Name, counter.Labels)
+			if err != nil {
+				log.Printf("Error getting map %q values for metric %q of config %q: %s", counter.Name, counter.Name, cfg.Name, err)
+				return nil, err
+			}
+
+			for _, metricValue := range mapValues {
+				cmd, pid, typ := extractInfoFromLabels(counter.Name, counter.Labels, metricValue.labels)
+				vec := RawMetric{
+					Program:    cfg.Name,
+					Table:      counter.Name,
+					Cmd:        cmd,
+					PidAndFlag: calPidAndFlag(pid, typ),
+					Value:      metricValue.value,
+				}
+
+				ret[cfg.Name] = append(ret[cfg.Name], vec)
+			}
+		}
+	}
+	return ret, nil
 }
 
 // collectCounters sends all known counters to prometheus
@@ -507,4 +582,22 @@ type metricValue struct {
 	labels []string
 	// value is the kernel map value
 	value float64
+}
+
+type RawMetric struct {
+	Program    string  `json:"program"`
+	Table      string  `json:"table"`
+	PidAndFlag uint64  `json:"pid_and_flag"`
+	Cmd        string  `json:"cmd"`
+	Value      float64 `json:"value"`
+}
+
+const pidMask uint64 = 0xFFFFFFFF
+
+func (r *RawMetric) ExtractFlag() uint32 {
+	return uint32(r.PidAndFlag >> 32)
+}
+
+func (r *RawMetric) ExtractPid() uint32 {
+	return uint32(r.PidAndFlag & pidMask)
 }

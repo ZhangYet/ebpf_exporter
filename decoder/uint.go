@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/cloudflare/ebpf_exporter/v2/config"
-	"github.com/cloudflare/ebpf_exporter/v2/util"
+	"github.com/ZhangYet/ebpf_exporter/config"
+	"github.com/ZhangYet/ebpf_exporter/util"
 )
 
 // UInt is a decoder that transforms unsigned integers into their string values

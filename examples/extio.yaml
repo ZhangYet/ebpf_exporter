@@ -1,0 +1,18 @@
+metrics:
+  counters:
+    - name: ext4size
+      help: help is required
+      table: ext4size
+      labels:
+        - name: command
+          size: 16
+          decoders:
+            - name: string
+        - name: pid
+          size: 4
+          decoders:
+            - name: uint
+        - name: type
+          size: 4
+          decoders:
+            - name: uint

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/cloudflare/ebpf_exporter/v2/config"
+	"github.com/ZhangYet/ebpf_exporter/config"
 )
 
 func TestStringDecoder(t *testing.T) {

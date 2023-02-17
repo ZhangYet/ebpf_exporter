@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cloudflare/ebpf_exporter/v2/config"
+	"github.com/ZhangYet/ebpf_exporter/config"
 )
 
 // ErrSkipLabelSet instructs exporter to skip label set
